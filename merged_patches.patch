@@ -425,7 +425,7 @@ index f572c28..c5131da 100644
  
      $payment->setRemoteState($directLinkResponse->getParam('STATUS'));
 diff --git a/src/PluginForm/ECommerceOffsiteForm.php b/src/PluginForm/ECommerceOffsiteForm.php
-index ebecae8..ac7630f 100644
+index ebecae8..01b0baf 100644
 --- a/src/PluginForm/ECommerceOffsiteForm.php
 +++ b/src/PluginForm/ECommerceOffsiteForm.php
 @@ -21,8 +21,6 @@ class ECommerceOffsiteForm extends BasePaymentOffsiteForm {
@@ -437,7 +437,7 @@ index ebecae8..ac7630f 100644
      // Save the payment entity so that we can get its ID and use it for
      // building the 'ORDERID' property for Ingenico. Then, when user returns
      // from the off-site redirect, we will update the same payment.
-@@ -46,10 +44,40 @@ class ECommerceOffsiteForm extends BasePaymentOffsiteForm {
+@@ -46,10 +44,45 @@ class ECommerceOffsiteForm extends BasePaymentOffsiteForm {
        'PAYMENT_ID' => $payment->id(),
      ]);
      // Ingenico requires the AMOUNT value to be sent in decimals.
@@ -452,20 +452,25 @@ index ebecae8..ac7630f 100644
 +    if ($brand != null && is_array($brand)) {
 +      $pmlist = '';
 +      foreach ($brand as $key => $method) {
-+        if($key == 0) {
-+          $pmlist = $method;
-+        } else {
-+          $pmlist .= ';' . $method;
++        if ($method != 'none') {
++          if($key == 0) {
++            $pmlist = $method;
++          } else {
++            $pmlist .= ';' . $method;
++          }
 +        }
 +      }
 +      $ecommercePaymentRequest->setPmlist($pmlist);
 +    } else if ($pm != null && is_array($pm)) {
 +      $pmlist = '';
 +      foreach ($pm as $key => $method) {
-+        if($key == 0) {
-+          $pmlist = $method;
-+        } else {
-+          $pmlist .= ';' . $method;
++        if ($method != 'none') {
++          if ($key == 0) {
++            $pmlist = $method;
++          }
++          else {
++            $pmlist .= ';' . $method;
++          }
 +        }
 +      }
 +      $ecommercePaymentRequest->setPmlist($pmlist);
@@ -479,12 +484,3 @@ index ebecae8..ac7630f 100644
      // At the beginning PaymentProcess::buildPaneForm() did not pass the
      // selected transaction mode to the offsite payment form, but we still
      // want the default mode to be capture.
-@@ -107,6 +135,8 @@ class ECommerceOffsiteForm extends BasePaymentOffsiteForm {
-     $data = $ecommercePaymentRequest->toArray();
-     $data['SHASIGN'] = $ecommercePaymentRequest->getShaSign();
- 
-+    echo '';
-+
-     // Log the request message if request logging is enabled.
-     if (!empty($payment_gateway_configuration['api_logging']['request'])) {
-       \Drupal::logger('commerce_ingenico')
