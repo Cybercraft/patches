@@ -425,7 +425,7 @@ index f572c28..c5131da 100644
  
      $payment->setRemoteState($directLinkResponse->getParam('STATUS'));
 diff --git a/src/PluginForm/ECommerceOffsiteForm.php b/src/PluginForm/ECommerceOffsiteForm.php
-index ebecae8..e7f232e 100644
+index ebecae8..ac7630f 100644
 --- a/src/PluginForm/ECommerceOffsiteForm.php
 +++ b/src/PluginForm/ECommerceOffsiteForm.php
 @@ -21,8 +21,6 @@ class ECommerceOffsiteForm extends BasePaymentOffsiteForm {
@@ -455,7 +455,7 @@ index ebecae8..e7f232e 100644
 +        if($key == 0) {
 +          $pmlist = $method;
 +        } else {
-+          $pmlist .= $method;
++          $pmlist .= ';' . $method;
 +        }
 +      }
 +      $ecommercePaymentRequest->setPmlist($pmlist);
