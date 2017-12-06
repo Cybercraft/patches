@@ -1,12 +1,13 @@
 diff --git a/src/Plugin/Commerce/PaymentGateway/ConfigurationTrait.php b/src/Plugin/Commerce/PaymentGateway/ConfigurationTrait.php
-index 80bb14d..6c35463 100644
+index 80bb14d..a0db93f 100644
 --- a/src/Plugin/Commerce/PaymentGateway/ConfigurationTrait.php
 +++ b/src/Plugin/Commerce/PaymentGateway/ConfigurationTrait.php
-@@ -18,9 +18,11 @@ trait ConfigurationTrait {
+@@ -18,9 +18,12 @@ trait ConfigurationTrait {
        'pspid' => '',
        'userid' => '',
        'password' => '',
-+      'payment_method' => '',
++      'pm' => '',
++      'brand' => '',
        'sha_algorithm' => HashAlgorithm::HASH_SHA512,
        'sha_in' => '',
        'sha_out' => '',
@@ -14,13 +15,64 @@ index 80bb14d..6c35463 100644
        'language' => 'en_US',
        'api_logging' => [
          'request' => 'request',
-@@ -69,6 +71,74 @@ trait ConfigurationTrait {
+@@ -69,6 +72,125 @@ trait ConfigurationTrait {
        '#required' => TRUE,
      ];
  
-+    $form['payment_method'] = [
++    $form['pm'] = [
 +      '#type' => 'select',
 +      '#title' => $this->t('Payment method'),
++      '#multiple' => TRUE,
++      '#options' => [
++        'none' => $this->t('- none -'),
++        'CreditCard' => 'CreditCard',
++        'Bank transfer' => 'Bank transfer',
++        'Bank transfer BE' => 'Bank transfer BE',
++        'Bank transfer DE' => 'Bank transfer DE',
++        'Bank transfer FR' => 'Bank transfer FR',
++        'Bank transfer NL' => 'Bank transfer NL',
++        'Belfius Direct Net' => 'Belfius Direct Net',
++        'cashU' => 'cashU',
++        'CBC Online' => 'CBC Online',
++        'CENTEA Online' => 'CENTEA Online',
++        'Dexia Direct Net' => 'Dexia Direct Net',
++        'Direct Debits AT' => 'Direct Debits AT',
++        'Direct Debits DE' => 'Direct Debits DE',
++        'Direct Debits NL' => 'Direct Debits NL',
++        'DirectEbankingDE' => 'DirectEbankingDE',
++        'DirectEbankingAT' => 'DirectEbankingAT',
++        'DirectEbankingIT' => 'DirectEbankingIT',
++        'DirectEbankingBE' => 'DirectEbankingBE',
++        'DirectEbankingFR' => 'DirectEbankingFR',
++        'eDankort' => 'eDankort',
++        'EPS' => 'EPS',
++        'Fortis Pay Button' => 'Fortis Pay Button',
++        'giropay' => 'giropay',
++        'iDEAL' => 'iDEAL',
++        'ING HomePay' => 'ING HomePay',
++        'InterSolve' => 'InterSolve',
++        'KBC Online' => 'KBC Online',
++        'MiniTix' => 'MiniTix',
++        'MPASS' => 'MPASS',
++        'Payment on Delivery' => 'Payment on Delivery',
++        'PAYPAL' => 'PAYPAL',
++        'paysafecard' => 'paysafecard',
++        'PingPing' => 'PingPing',
++        'PostFinance Card' => 'PostFinance Card',
++        'PostFinance e-finance' => 'PostFinance e-finance',
++        'DirectEbanking' => 'DirectEbanking',
++        'TUNZ' => 'TUNZ',
++        'UNEUROCOM' => 'UNEUROCOM',
++        'Wallie' => 'Wallie',
++      ],
++      '#description' => $this->t('Here, you can specify a card brand that will send to Ingenico.'),
++      '#default_value' => $this->configuration['pm'],
++    ];
++
++    $form['brand'] = [
++      '#type' => 'select',
++      '#title' => $this->t('Payment method brand'),
++      '#multiple' => TRUE,
 +      '#options' => [
 +        'none' => $this->t('- none -'),
 +        'Acceptgiro' => 'Acceptgiro',
@@ -82,14 +134,14 @@ index 80bb14d..6c35463 100644
 +        'VISA' => 'VISA',
 +        'Wallie' => 'Wallie',
 +      ],
-+      '#description' => $this->t('Here, you can specify a payment method that will send to Ingenico.'),
-+      '#default_value' => $this->configuration['payment_method'],
++      '#description' => $this->t('Here, you can specify a card brand that will send to Ingenico.'),
++      '#default_value' => $this->configuration['brand'],
 +    ];
 +
      $form['sha_algorithm'] = [
        '#type' => 'select',
        '#title' => $this->t('SHA algorithm type'),
-@@ -98,6 +168,13 @@ trait ConfigurationTrait {
+@@ -98,6 +220,13 @@ trait ConfigurationTrait {
        '#required' => TRUE,
      ];
  
@@ -103,7 +155,7 @@ index 80bb14d..6c35463 100644
      $shaComposer = new AllParametersShaComposer(new Passphrase(''));
      $ecommercePaymentRequest = new EcommercePaymentRequest($shaComposer);
      $form['language'] = [
-@@ -110,10 +187,10 @@ trait ConfigurationTrait {
+@@ -110,10 +239,10 @@ trait ConfigurationTrait {
      $form['api_logging'] = [
        '#type' => 'checkboxes',
        '#title' => $this->t('Log the following messages for debugging'),
@@ -116,7 +168,7 @@ index 80bb14d..6c35463 100644
        '#default_value' => $this->configuration['api_logging'],
      ];
  
-@@ -130,7 +207,8 @@ trait ConfigurationTrait {
+@@ -130,7 +259,8 @@ trait ConfigurationTrait {
        // if a cardholder authentication is requested. Therefore to be able to
        // use 3-D Secure, we need to have a e-Commerce payment gateway defined.
        // @see https://payment-services.ingenico.com/int/en/ogone/support/guides/integration%20guides/directlink-3-d
@@ -126,7 +178,7 @@ index 80bb14d..6c35463 100644
        $options = [];
        foreach ($gateways as $id => $gateway) {
          $options[$id] = $gateway->label();
-@@ -154,7 +232,7 @@ trait ConfigurationTrait {
+@@ -154,7 +284,7 @@ trait ConfigurationTrait {
            '#default_value' => $this->configuration['3ds']['3d_secure_ecommerce_gateway'],
            '#states' => [
              'visible' => [
@@ -135,11 +187,16 @@ index 80bb14d..6c35463 100644
              ],
            ],
          ];
-@@ -212,9 +290,11 @@ trait ConfigurationTrait {
+@@ -212,9 +342,16 @@ trait ConfigurationTrait {
        $this->configuration['pspid'] = $values['pspid'];
        $this->configuration['userid'] = $values['userid'];
        $this->configuration['password'] = $values['password'];
-+      $this->configuration['payment_method'] = $values['payment_method'];
++      if($values['pm'] != 'none') {
++        $this->configuration['pm'] = $values['pm'];
++      }
++      if($values['brand'] != 'none') {
++        $this->configuration['brand'] = $values['brand'];
++      }
        $this->configuration['sha_algorithm'] = $values['sha_algorithm'];
        $this->configuration['sha_in'] = $values['sha_in'];
        $this->configuration['sha_out'] = $values['sha_out'];
@@ -148,7 +205,7 @@ index 80bb14d..6c35463 100644
        $this->configuration['api_logging'] = $values['api_logging'];
        if (isset($values['3ds'])) {
 diff --git a/src/Plugin/Commerce/PaymentGateway/DirectLink.php b/src/Plugin/Commerce/PaymentGateway/DirectLink.php
-index 1779df0..9cb36ea 100644
+index 1779df0..35f07f3 100644
 --- a/src/Plugin/Commerce/PaymentGateway/DirectLink.php
 +++ b/src/Plugin/Commerce/PaymentGateway/DirectLink.php
 @@ -4,20 +4,17 @@ namespace Drupal\commerce_ingenico\Plugin\Commerce\PaymentGateway;
@@ -213,6 +270,15 @@ index 1779df0..9cb36ea 100644
  
      $passphrase = new Passphrase($this->configuration['sha_in']);
      $sha_algorithm = new HashAlgorithm($this->configuration['sha_algorithm']);
+@@ -269,7 +260,7 @@ class DirectLink extends OnsitePaymentGatewayBase implements DirectLinkInterface
+       'PAYMENT_ID' => $payment->id(),
+     ]);
+     // Ingenico requires the AMOUNT value to be sent in decimals.
+-    $directLinkRequest->setAmount((int) $payment->getAmount()->getNumber() * 100);
++    $directLinkRequest->setAmount((int) ($payment->getAmount()->getNumber() * 100));
+     $directLinkRequest->setCurrency($payment->getAmount()->getCurrencyCode());
+     $directLinkRequest->setLanguage($this->configuration['language']);
+ 
 @@ -392,13 +383,9 @@ class DirectLink extends OnsitePaymentGatewayBase implements DirectLinkInterface
        ]), $directLinkResponse->getParam('NCERROR'));
      }
@@ -359,7 +425,7 @@ index f572c28..c5131da 100644
  
      $payment->setRemoteState($directLinkResponse->getParam('STATUS'));
 diff --git a/src/PluginForm/ECommerceOffsiteForm.php b/src/PluginForm/ECommerceOffsiteForm.php
-index ebecae8..71821e4 100644
+index ebecae8..dd1d741 100644
 --- a/src/PluginForm/ECommerceOffsiteForm.php
 +++ b/src/PluginForm/ECommerceOffsiteForm.php
 @@ -21,8 +21,6 @@ class ECommerceOffsiteForm extends BasePaymentOffsiteForm {
@@ -371,16 +437,49 @@ index ebecae8..71821e4 100644
      // Save the payment entity so that we can get its ID and use it for
      // building the 'ORDERID' property for Ingenico. Then, when user returns
      // from the off-site redirect, we will update the same payment.
-@@ -49,6 +47,12 @@ class ECommerceOffsiteForm extends BasePaymentOffsiteForm {
-     $ecommercePaymentRequest->setAmount((int) $payment->getAmount()->getNumber() * 100);
+@@ -46,10 +44,44 @@ class ECommerceOffsiteForm extends BasePaymentOffsiteForm {
+       'PAYMENT_ID' => $payment->id(),
+     ]);
+     // Ingenico requires the AMOUNT value to be sent in decimals.
+-    $ecommercePaymentRequest->setAmount((int) $payment->getAmount()->getNumber() * 100);
++    $ecommercePaymentRequest->setAmount((int) ($payment->getAmount()->getNumber() * 100));
      $ecommercePaymentRequest->setCurrency($payment->getAmount()->getCurrencyCode());
      $ecommercePaymentRequest->setLanguage($payment_gateway_configuration['language']);
-+    $ecommercePaymentRequest->setBrand($payment_gateway_configuration['payment_method']);
+ 
++    $pm = $payment_gateway_configuration['pm'];
++    $brand = $payment_gateway_configuration['brand'];
++
++    if ($brand != null && is_array($brand) && !is_array($pm)) {
++      $pmlist = '';
++      foreach ($brand as $key => $method) {
++        if($key == 0) {
++          $pmlist = $method;
++        } else {
++          $pmlist .= $method;
++        }
++      }
++      $ecommercePaymentRequest->setPmlist($pmlist);
++    } else if ($pm != null && is_array($pm)) {
++      $pmlist = '';
++      foreach ($brand as $key => $method) {
++        if($key == 0) {
++          $pmlist = $method;
++        } else {
++          $pmlist .= ';' . $method;
++        }
++      }
++      $ecommercePaymentRequest->setPmlist($pmlist);
++    } else if ($pm != null && $pm != 'none' && is_string($pm)) {
++      $ecommercePaymentRequest->setPm($pm);
++    } else if ($brand != null && $brand != 'none' && is_string($pm)) {
++      $ecommercePaymentRequest->setBrand($brand);
++    }
 +
 +    // Set static template if not empty
 +    if(!empty($payment_gateway_configuration['tp'])) {
 +      $ecommercePaymentRequest->setTp($payment_gateway_configuration['tp']);
 +    }
- 
++
      // At the beginning PaymentProcess::buildPaneForm() did not pass the
      // selected transaction mode to the offsite payment form, but we still
+     // want the default mode to be capture.
