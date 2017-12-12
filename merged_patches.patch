@@ -1,3 +1,21 @@
+diff --git a/commerce_ingenico.info.yml b/commerce_ingenico.info.yml
+index 6a3be3a..bfb508a 100644
+--- a/commerce_ingenico.info.yml
++++ b/commerce_ingenico.info.yml
+@@ -2,12 +2,6 @@ name: Commerce Ingenico
+ type: module
+ description: 'Provides Drupal Commerce integration with Ingenico payment services.'
+ package: Commerce (contrib)
+-# core: 8.x
++core: 8.x
+ dependencies:
+   - commerce_payment
+-
+-# Information added by Drupal.org packaging script on 2017-12-06
+-version: '8.x-1.x-dev'
+-core: '8.x'
+-project: 'commerce_ingenico'
+-datestamp: 1512574687
 diff --git a/src/Plugin/Commerce/PaymentGateway/ConfigurationTrait.php b/src/Plugin/Commerce/PaymentGateway/ConfigurationTrait.php
 index 80bb14d..a0db93f 100644
 --- a/src/Plugin/Commerce/PaymentGateway/ConfigurationTrait.php
@@ -204,245 +222,11 @@ index 80bb14d..a0db93f 100644
        $this->configuration['language'] = $values['language'];
        $this->configuration['api_logging'] = $values['api_logging'];
        if (isset($values['3ds'])) {
-diff --git a/src/Plugin/Commerce/PaymentGateway/DirectLink.php b/src/Plugin/Commerce/PaymentGateway/DirectLink.php
-index 1779df0..35f07f3 100644
---- a/src/Plugin/Commerce/PaymentGateway/DirectLink.php
-+++ b/src/Plugin/Commerce/PaymentGateway/DirectLink.php
-@@ -4,20 +4,17 @@ namespace Drupal\commerce_ingenico\Plugin\Commerce\PaymentGateway;
- 
- use Drupal\Component\Utility\UrlHelper;
- use Drupal\Core\Entity\EntityTypeManagerInterface;
--use Drupal\Core\Form\FormStateInterface;
- use Drupal\Core\Url;
--use Drupal\commerce_ingenico\PluginForm\PaymentRenewAuthorizationForm;
-+use Drupal\Component\Datetime\TimeInterface;
- use Drupal\commerce_payment\CreditCard;
- use Drupal\commerce_payment\Entity\PaymentInterface;
- use Drupal\commerce_payment\Entity\PaymentMethodInterface;
- use Drupal\commerce_payment\Exception\DeclineException;
- use Drupal\commerce_payment\Exception\InvalidResponseException;
- use Drupal\commerce_payment\Exception\HardDeclineException;
--use Drupal\commerce_payment\Exception\InvalidRequestException;
- use Drupal\commerce_payment\PaymentMethodTypeManager;
- use Drupal\commerce_payment\PaymentTypeManager;
- use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OnsitePaymentGatewayBase;
--use Drupal\commerce_price\Price;
- use GuzzleHttp\ClientInterface;
- use Ogone\DirectLink\Alias;
- use Ogone\DirectLink\CreateAliasRequest;
-@@ -65,9 +62,9 @@ class DirectLink extends OnsitePaymentGatewayBase implements DirectLinkInterface
-   /**
-    * {@inheritdoc}
-    */
--  public function __construct(array $configuration, $plugin_id, $plugin_definition, EntityTypeManagerInterface $entity_type_manager, PaymentTypeManager $payment_type_manager, PaymentMethodTypeManager $payment_method_type_manager, ClientInterface $client) {
-+  public function __construct(array $configuration, $plugin_id, $plugin_definition, EntityTypeManagerInterface $entity_type_manager, PaymentTypeManager $payment_type_manager, PaymentMethodTypeManager $payment_method_type_manager, TimeInterface $time, ClientInterface $client) {
-     $this->httpClient = $client;
--    parent::__construct($configuration, $plugin_id, $plugin_definition, $entity_type_manager, $payment_type_manager, $payment_method_type_manager);
-+    parent::__construct($configuration, $plugin_id, $plugin_definition, $entity_type_manager, $payment_type_manager, $payment_method_type_manager, $time);
-  }
- 
-   /**
-@@ -81,6 +78,7 @@ class DirectLink extends OnsitePaymentGatewayBase implements DirectLinkInterface
-       $container->get('entity_type.manager'),
-       $container->get('plugin.manager.commerce_payment_type'),
-       $container->get('plugin.manager.commerce_payment_method_type'),
-+      $container->get('datetime.time'),
-       $container->get('http_client')
-     );
-   }
-@@ -232,17 +230,10 @@ class DirectLink extends OnsitePaymentGatewayBase implements DirectLinkInterface
-    * @see https://payment-services.ingenico.com/int/en/ogone/support/guides/integration%20guides/directlink
-    */
-   public function createPayment(PaymentInterface $payment, $capture = TRUE) {
--    if ($payment->getState()->value != 'new') {
--      throw new \InvalidArgumentException('The provided payment is in an invalid state.');
--    }
-+    $this->assertPaymentState($payment, ['new']);
- 
-     $payment_method = $payment->getPaymentMethod();
--    if (empty($payment_method)) {
--      throw new \InvalidArgumentException('The provided payment has no payment method referenced.');
--    }
--    if (REQUEST_TIME >= $payment_method->getExpiresTime()) {
--      throw new HardDeclineException('The provided payment method has expired');
--    }
-+    $this->assertPaymentMethod($payment_method);
- 
-     $passphrase = new Passphrase($this->configuration['sha_in']);
-     $sha_algorithm = new HashAlgorithm($this->configuration['sha_algorithm']);
-@@ -269,7 +260,7 @@ class DirectLink extends OnsitePaymentGatewayBase implements DirectLinkInterface
-       'PAYMENT_ID' => $payment->id(),
-     ]);
-     // Ingenico requires the AMOUNT value to be sent in decimals.
--    $directLinkRequest->setAmount((int) $payment->getAmount()->getNumber() * 100);
-+    $directLinkRequest->setAmount((int) ($payment->getAmount()->getNumber() * 100));
-     $directLinkRequest->setCurrency($payment->getAmount()->getCurrencyCode());
-     $directLinkRequest->setLanguage($this->configuration['language']);
- 
-@@ -392,13 +383,9 @@ class DirectLink extends OnsitePaymentGatewayBase implements DirectLinkInterface
-       ]), $directLinkResponse->getParam('NCERROR'));
-     }
- 
--    $payment->state = $capture ? 'capture_completed' : 'authorization';
-+    $payment->state = $capture ? 'completed' : 'authorization';
-     $payment->setRemoteId($directLinkResponse->getParam('PAYID'));
-     $payment->setRemoteState($directLinkResponse->getParam('STATUS'));
--    $payment->setAuthorizedTime(REQUEST_TIME);
--    if ($capture) {
--      $payment->setCapturedTime(REQUEST_TIME);
--    }
-     $payment->save();
-   }
- 
-diff --git a/src/Plugin/Commerce/PaymentGateway/ECommerce.php b/src/Plugin/Commerce/PaymentGateway/ECommerce.php
-index 5bda04d..e6d4b60 100644
---- a/src/Plugin/Commerce/PaymentGateway/ECommerce.php
-+++ b/src/Plugin/Commerce/PaymentGateway/ECommerce.php
-@@ -6,6 +6,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
- use Drupal\Core\Form\FormStateInterface;
- use Drupal\commerce_order\Entity\OrderInterface;
- use Drupal\commerce_payment\Entity\PaymentInterface;
-+use Drupal\Component\Datetime\TimeInterface;
- use Drupal\commerce_payment\Exception\DeclineException;
- use Drupal\commerce_payment\Exception\InvalidResponseException;
- use Drupal\commerce_payment\PaymentMethodTypeManager;
-@@ -53,8 +54,8 @@ class ECommerce extends OffsitePaymentGatewayBase implements EcommerceInterface
-   /**
-    * {@inheritdoc}
-    */
--  public function __construct(array $configuration, $plugin_id, $plugin_definition, EntityTypeManagerInterface $entity_type_manager, PaymentTypeManager $payment_type_manager, PaymentMethodTypeManager $payment_method_type_manager) {
--    parent::__construct($configuration, $plugin_id, $plugin_definition, $entity_type_manager, $payment_type_manager, $payment_method_type_manager);
-+  public function __construct(array $configuration, $plugin_id, $plugin_definition, EntityTypeManagerInterface $entity_type_manager, PaymentTypeManager $payment_type_manager, PaymentMethodTypeManager $payment_method_type_manager, TimeInterface $time) {
-+    parent::__construct($configuration, $plugin_id, $plugin_definition, $entity_type_manager, $payment_type_manager, $payment_method_type_manager, $time);
-     // We need to define httpClient here for capture/void/refund operations,
-     // as it is not passed to off-site plugins constructor.
-     $this->httpClient = new Client();
-@@ -110,12 +111,8 @@ class ECommerce extends OffsitePaymentGatewayBase implements EcommerceInterface
-     // Let's also update payment state here - it's safer doing it from received
-     // asynchronous notification rather than from the redirect back from the
-     // off-site redirect.
--    $state = $request->query->get('STATUS') == PaymentResponse::STATUS_AUTHORISED ? 'authorization' : 'capture_completed';
-+    $state = $request->query->get('STATUS') == PaymentResponse::STATUS_AUTHORISED ? 'authorization' : 'completed';
-     $payment->set('state', $state);
--    $payment->setAuthorizedTime(REQUEST_TIME);
--    if ($request->query->get('STATUS') != PaymentResponse::STATUS_AUTHORISED) {
--      $payment->setCapturedTime(REQUEST_TIME);
--    }
-     $payment->save();
-   }
- 
-diff --git a/src/Plugin/Commerce/PaymentGateway/OperationsTrait.php b/src/Plugin/Commerce/PaymentGateway/OperationsTrait.php
-index f572c28..c5131da 100644
---- a/src/Plugin/Commerce/PaymentGateway/OperationsTrait.php
-+++ b/src/Plugin/Commerce/PaymentGateway/OperationsTrait.php
-@@ -71,18 +71,13 @@ trait OperationsTrait {
-    * @see https://payment-services.ingenico.com/int/en/ogone/support/guides/integration%20guides/directlink/maintenance
-    */
-   public function capturePayment(PaymentInterface $payment, Price $amount = NULL) {
--    if ($payment->getState()->value != 'authorization') {
--      throw new \InvalidArgumentException($this->t('Only payments in the "authorization" state can be captured.'));
--    }
-+    $this->assertPaymentState($payment, ['authorization']);
- 
-     // If not specified, capture the entire amount.
-     $amount = $amount ?: $payment->getAmount();
- 
-     // Validate the requested amount.
--    $balance = $payment->getBalance();
--    if ($amount->greaterThan($balance)) {
--      throw new InvalidRequestException($this->t('Cannot capture more than @amount.', ['@amount' => (string) $balance]));
--    }
-+    $this->assertRefundAmount($payment, $amount);
- 
-     $passphrase = new Passphrase($this->configuration['sha_in']);
-     $sha_algorithm = new HashAlgorithm($this->configuration['sha_algorithm']);
-@@ -146,10 +141,9 @@ trait OperationsTrait {
-       ]), $directLinkResponse->getParam('NCERROR'));
-     }
- 
--    $payment->state = 'capture_completed';
-+    $payment->state = 'completed';
-     $payment->setRemoteState($directLinkResponse->getParam('STATUS'));
-     $payment->setAmount($amount);
--    $payment->setCapturedTime(REQUEST_TIME);
-     $payment->save();
-   }
- 
-@@ -159,9 +153,7 @@ trait OperationsTrait {
-    * @see https://payment-services.ingenico.com/int/en/ogone/support/guides/integration%20guides/directlink/maintenance
-    */
-   public function voidPayment(PaymentInterface $payment) {
--    if ($payment->getState()->value != 'authorization') {
--      throw new \InvalidArgumentException($this->t('Only payments in the "authorization" state can be voided.'));
--    }
-+    $this->assertPaymentState($payment, ['authorization']);
- 
-     $passphrase = new Passphrase($this->configuration['sha_in']);
-     $sha_algorithm = new HashAlgorithm($this->configuration['sha_algorithm']);
-@@ -250,9 +242,7 @@ trait OperationsTrait {
-    * @see https://payment-services.ingenico.com/int/en/ogone/support/guides/integration%20guides/directlink/maintenance
-    */
-   public function renewAuthorization(PaymentInterface $payment) {
--    if ($payment->getState()->value != 'authorization') {
--      throw new \InvalidArgumentException($this->t('Only authorizations for payments in the "authorization" state can be renewed.'));
--    }
-+    $this->assertPaymentState($payment, ['authorization']);
- 
-     $passphrase = new Passphrase($this->configuration['sha_in']);
-     $sha_algorithm = new HashAlgorithm($this->configuration['sha_algorithm']);
-@@ -324,18 +314,13 @@ trait OperationsTrait {
-    * @see https://payment-services.ingenico.com/int/en/ogone/support/guides/integration%20guides/directlink/maintenance
-    */
-   public function refundPayment(PaymentInterface $payment, Price $amount = NULL) {
--    if (!in_array($payment->getState()->value, ['capture_completed', 'capture_partially_refunded'])) {
--      throw new \InvalidArgumentException($this->t('Only payments in the "capture_completed" and "capture_partially_refunded" states can be refunded.'));
--    }
-+    $this->assertPaymentState($payment, ['completed', 'partially_refunded']);
- 
-     // If not specified, refund the entire amount.
-     $amount = $amount ?: $payment->getAmount();
- 
-     // Validate the requested amount.
--    $balance = $payment->getBalance();
--    if ($amount->greaterThan($balance)) {
--      throw new InvalidRequestException($this->t('Cannot refund more than @amount.', ['@amount' => (string) $balance]));
--    }
-+    $this->assertRefundAmount($payment, $amount);
- 
-     $passphrase = new Passphrase($this->configuration['sha_in']);
-     $sha_algorithm = new HashAlgorithm($this->configuration['sha_algorithm']);
-@@ -402,10 +387,10 @@ trait OperationsTrait {
-     $old_refunded_amount = $payment->getRefundedAmount();
-     $new_refunded_amount = $old_refunded_amount->add($amount);
-     if ($new_refunded_amount->lessThan($payment->getAmount())) {
--      $payment->state = 'capture_partially_refunded';
-+      $payment->state = 'partially_refunded';
-     }
-     else {
--      $payment->state = 'capture_refunded';
-+      $payment->state = 'refunded';
-     }
- 
-     $payment->setRemoteState($directLinkResponse->getParam('STATUS'));
 diff --git a/src/PluginForm/ECommerceOffsiteForm.php b/src/PluginForm/ECommerceOffsiteForm.php
-index ebecae8..01b0baf 100644
+index fa56a58..88eaaba 100644
 --- a/src/PluginForm/ECommerceOffsiteForm.php
 +++ b/src/PluginForm/ECommerceOffsiteForm.php
-@@ -21,8 +21,6 @@ class ECommerceOffsiteForm extends BasePaymentOffsiteForm {
- 
-     /** @var \Drupal\commerce_payment\Entity\PaymentInterface $payment */
-     $payment = $this->entity;
--    // The test property is not yet added at this point.
--    $payment->setTest($payment->getPaymentGateway()->getPlugin()->getMode() == 'test');
-     // Save the payment entity so that we can get its ID and use it for
-     // building the 'ORDERID' property for Ingenico. Then, when user returns
-     // from the off-site redirect, we will update the same payment.
-@@ -46,10 +44,45 @@ class ECommerceOffsiteForm extends BasePaymentOffsiteForm {
-       'PAYMENT_ID' => $payment->id(),
-     ]);
-     // Ingenico requires the AMOUNT value to be sent in decimals.
--    $ecommercePaymentRequest->setAmount((int) $payment->getAmount()->getNumber() * 100);
-+    $ecommercePaymentRequest->setAmount((int) ($payment->getAmount()->getNumber() * 100));
+@@ -48,6 +48,46 @@ class ECommerceOffsiteForm extends BasePaymentOffsiteForm {
      $ecommercePaymentRequest->setCurrency($payment->getAmount()->getCurrencyCode());
      $ecommercePaymentRequest->setLanguage($payment_gateway_configuration['language']);
  
@@ -451,16 +235,21 @@ index ebecae8..01b0baf 100644
 +
 +    if ($brand != null && is_array($brand)) {
 +      $pmlist = '';
-+      foreach ($brand as $key => $method) {
-+        if ($method != 'none') {
-+          if($key == 0) {
-+            $pmlist = $method;
-+          } else {
-+            $pmlist .= ';' . $method;
++      if(!isset($brand[1])) {
++        // Only one brand
++        $ecommercePaymentRequest->setBrand($brand[0]);
++      } else {
++        foreach ($brand as $key => $method) {
++          if ($method != 'none') {
++            if($key == 0) {
++              $pmlist = $method;
++            } else {
++              $pmlist .= ';' . $method;
++            }
 +          }
 +        }
++        $ecommercePaymentRequest->setPmlist($pmlist);
 +      }
-+      $ecommercePaymentRequest->setPmlist($pmlist);
 +    } else if ($pm != null && is_array($pm)) {
 +      $pmlist = '';
 +      foreach ($pm as $key => $method) {
