@@ -1,0 +1,13 @@
+diff --git a/src/PluginForm/ECommerceOffsiteForm.php b/src/PluginForm/ECommerceOffsiteForm.php
+index e5352b4..29c6054 100644
+--- a/src/PluginForm/ECommerceOffsiteForm.php
++++ b/src/PluginForm/ECommerceOffsiteForm.php
+@@ -108,7 +108,7 @@ class ECommerceOffsiteForm extends BasePaymentOffsiteForm {
+     $ecommercePaymentRequest->setEmail($payment->getOrder()->getEmail());
+     $billing_address = $payment->getOrder()->getBillingProfile()->get('address')->first();
+     $ecommercePaymentRequest->setCn($billing_address->getGivenName() . ' ' . $billing_address->getFamilyName());
+-    $ecommercePaymentRequest->setOwnerAddress($billing_address->getAddressLine1());
++    $ecommercePaymentRequest->setOwnerAddress(substr($billing_address->getAddressLine1(), 0, 35));
+     $ecommercePaymentRequest->setOwnerZip($billing_address->getPostalCode());
+     $ecommercePaymentRequest->setOwnerTown($billing_address->getLocality());
+     $ecommercePaymentRequest->setOwnerCty($billing_address->getCountryCode());
